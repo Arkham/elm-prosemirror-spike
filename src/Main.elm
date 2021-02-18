@@ -27,10 +27,7 @@ view : Model -> Html msg
 view model =
     Html.section []
         [ Html.h1 [] [ Html.text "Elm Prosemirror spike" ]
-        , Html.p []
-            [ Html.text "Find the source on "
-            , Html.a [ Html.Attributes.href "https://github.com/JoelQ/elm-netlify-parcel" ] [ Html.text "GitHub" ]
-            ]
+        , Html.node "elm-prosemirror" [] []
         ]
 
 
