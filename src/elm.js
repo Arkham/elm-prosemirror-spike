@@ -6,6 +6,11 @@ import {schema} from "prosemirror-schema-basic"
 import {addListNodes} from "prosemirror-schema-list"
 import {exampleSetup} from "prosemirror-example-setup"
 
+Elm.Main.init({
+  node: document.querySelector('#elm'),
+  flags: {}
+})
+
 // Mix the nodes from prosemirror-schema-list into the basic schema to
 // create a schema with list support.
 const mySchema = new Schema({
@@ -18,10 +23,4 @@ window.view = new EditorView(document.querySelector("#editor"), {
     doc: DOMParser.fromSchema(mySchema).parse(document.querySelector("#content")),
     plugins: exampleSetup({schema: mySchema})
   })
-})
-
-
-Elm.Main.init({
-  node: document.querySelector('#elm'),
-  flags: {}
 })
