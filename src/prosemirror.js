@@ -32,11 +32,27 @@ class ElmProseMirror extends HTMLElement {
   }
 
   _initProseMirror() {
+    let self = this;
     this._editor = new EditorView(this._element, {
       state: EditorState.create({
-        doc: defaultMarkdownParser.parse("# Hello darkness my old friend"),
+        doc: defaultMarkdownParser.parse("# Hello darkness my old friend\n### I've come to talk with you again\nlorem ipsum, [google](www.google.com)\n\n- hoho\n- haha\n  - hehe"),
         plugins: exampleSetup({schema: mySchema})
-      })
+      }),
+      dispatchTransaction: function(tr) {
+        this.updateState(this.state.apply(tr));
+        const newState = this.state.doc.toJSON();
+        console.log(JSON.stringify(newState, null, 2));
+        console.log(tr.selection.from);
+        console.log(tr.selection.to);
+
+        const event = new CustomEvent('change', {
+          detail: {
+            state: newState
+          }
+        });
+
+        self.dispatchEvent(event);
+      }
     });
   }
 }
