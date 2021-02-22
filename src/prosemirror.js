@@ -13,17 +13,27 @@ const mySchema = new Schema({
   marks: schema.spec.marks
 })
 
+const myPlugins = exampleSetup({schema: mySchema});
+
+const stateFromJSON = EditorState.fromJSON;
+
 class ElmProseMirror extends HTMLElement {
   constructor() { super(); }
 
   connectedCallback() {
     this._initElement();
     this._initProseMirror();
+    this._updateProseMirror();
   }
 
   attributeChangedCallback() { return; }
 
   static get observedAttributes() { return []; }
+
+  set content(content) {
+    this._content = content;
+    this._updateProseMirror();
+  }
 
   _initElement() {
     this._element = document.createElement('div');
@@ -35,13 +45,14 @@ class ElmProseMirror extends HTMLElement {
     let self = this;
     this._editor = new EditorView(this._element, {
       state: EditorState.create({
-        doc: defaultMarkdownParser.parse("# Hello darkness my old friend\n### I've come to talk with you again\nlorem ipsum, [google](www.google.com)\n\n- hoho\n- haha\n  - hehe"),
-        plugins: exampleSetup({schema: mySchema})
+        // doc: defaultMarkdownParser.parse("# Hello darkness my old friend\n### I've come to talk with you again\nlorem ipsum, [google](www.google.com)\n\n- hoho\n- haha\n  - hehe"),
+        doc: defaultMarkdownParser.parse(""),
+        plugins: myPlugins
       }),
       dispatchTransaction: function(tr) {
         this.updateState(this.state.apply(tr));
         const newState = this.state.doc.toJSON();
-        console.log(JSON.stringify(newState, null, 2));
+        console.log(JSON.stringify(newState));
         console.log(tr.selection.from);
         console.log(tr.selection.to);
 
@@ -54,6 +65,20 @@ class ElmProseMirror extends HTMLElement {
         self.dispatchEvent(event);
       }
     });
+  }
+
+  _updateProseMirror() {
+    if (!this._editor || !this._content) return;
+
+    // ugly hack
+    if (JSON.stringify(this._editor.state.doc.toJSON()) == JSON.stringify(this._content)) return;
+
+    const newState = EditorState.fromJSON({schema: mySchema, plugins: myPlugins}, {
+      doc: this._content,
+      selection: this._editor.state.selection.toJSON()
+    });
+
+    this._editor.updateState(newState);
   }
 }
 
