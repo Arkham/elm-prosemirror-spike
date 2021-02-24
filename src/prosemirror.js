@@ -1,6 +1,6 @@
 import {EditorState} from "prosemirror-state"
 import {EditorView} from "prosemirror-view"
-import {Schema, DOMParser} from "prosemirror-model"
+import {Schema, Node} from "prosemirror-model"
 import {schema} from "prosemirror-schema-basic"
 import {addListNodes} from "prosemirror-schema-list"
 import {exampleSetup} from "prosemirror-example-setup"
@@ -15,15 +15,12 @@ const mySchema = new Schema({
 
 const myPlugins = exampleSetup({schema: mySchema});
 
-const stateFromJSON = EditorState.fromJSON;
-
 class ElmProseMirror extends HTMLElement {
   constructor() { super(); }
 
   connectedCallback() {
     this._initElement();
     this._initProseMirror();
-    this._updateProseMirror();
   }
 
   attributeChangedCallback() { return; }
@@ -31,8 +28,9 @@ class ElmProseMirror extends HTMLElement {
   static get observedAttributes() { return []; }
 
   set content(content) {
-    this._content = content;
-    this._updateProseMirror();
+    if (!this._content) {
+      this._content = content;
+    }
   }
 
   _initElement() {
@@ -42,11 +40,13 @@ class ElmProseMirror extends HTMLElement {
   }
 
   _initProseMirror() {
+    if (!this._content) { return; }
+
     let self = this;
+
     this._editor = new EditorView(this._element, {
       state: EditorState.create({
-        // doc: defaultMarkdownParser.parse("# Hello darkness my old friend\n### I've come to talk with you again\nlorem ipsum, [google](www.google.com)\n\n- hoho\n- haha\n  - hehe"),
-        doc: defaultMarkdownParser.parse(""),
+        doc: Node.fromJSON(mySchema, this._content),
         plugins: myPlugins
       }),
       dispatchTransaction: function(tr) {
@@ -65,20 +65,6 @@ class ElmProseMirror extends HTMLElement {
         self.dispatchEvent(event);
       }
     });
-  }
-
-  _updateProseMirror() {
-    if (!this._editor || !this._content) return;
-
-    // ugly hack
-    if (JSON.stringify(this._editor.state.doc.toJSON()) == JSON.stringify(this._content)) return;
-
-    const newState = EditorState.fromJSON({schema: mySchema, plugins: myPlugins}, {
-      doc: this._content,
-      selection: this._editor.state.selection.toJSON()
-    });
-
-    this._editor.updateState(newState);
   }
 }
 
