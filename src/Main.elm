@@ -2,7 +2,7 @@ module Main exposing (main)
 
 import Browser
 import Html exposing (Html)
-import Html.Attributes
+import Html.Events as Events
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Prosemirror
@@ -48,11 +48,13 @@ customMarkEncoder mark =
 type alias Model =
     { selection : Range
     , doc : Prosemirror.Doc CustomMark
+    , isHighlighting : Bool
     }
 
 
 type Msg
     = DocChange (Prosemirror.Doc CustomMark)
+    | ToggleHighlighting
 
 
 main : Program () Model Msg
@@ -72,6 +74,7 @@ main =
                                         Debug.log "Error while decoding document: " err
                                 in
                                 Prosemirror.empty
+                  , isHighlighting = False
                   }
                 , Cmd.none
                 )
@@ -91,6 +94,14 @@ view model =
             , onChange = DocChange
             }
             model.doc
+        , Html.button [ Events.onClick ToggleHighlighting ]
+            [ Html.text <|
+                if model.isHighlighting then
+                    "Stop highlighting"
+
+                else
+                    "Start highlighting"
+            ]
         , Html.h2 [] [ Html.text "DEBUG" ]
         , Html.div [] [ Html.text <| Debug.toString model.doc ]
         ]
@@ -101,6 +112,9 @@ update msg model =
     case msg of
         DocChange doc ->
             ( { model | doc = doc }, Cmd.none )
+
+        ToggleHighlighting ->
+            ( { model | isHighlighting = not model.isHighlighting }, Cmd.none )
 
 
 docJson : String
