@@ -4,6 +4,7 @@ import Browser
 import Html exposing (Html)
 import Html.Attributes
 import Json.Decode as Decode
+import Json.Encode as Encode
 import Prosemirror
 
 
@@ -13,14 +14,45 @@ type alias Range =
     }
 
 
+type CustomMark
+    = Highlight String
+
+
+customMarkDecoder : String -> Decode.Decoder CustomMark
+customMarkDecoder name =
+    case name of
+        "highlight" ->
+            Decode.map Highlight
+                (Decode.at [ "attrs", "id" ]
+                    Decode.string
+                )
+
+        other ->
+            Decode.fail ("I've found a mark I don't know: " ++ other)
+
+
+customMarkEncoder : CustomMark -> Encode.Value
+customMarkEncoder mark =
+    case mark of
+        Highlight str ->
+            Encode.object
+                [ ( "type", Encode.string "highlight" )
+                , ( "attrs"
+                  , Encode.object
+                        [ ( "id", Encode.string str )
+                        ]
+                  )
+                ]
+
+
 type alias Model =
     { selection : Range
-    , doc : Prosemirror.Doc
+    , doc : Prosemirror.Doc CustomMark
     }
 
 
 type Msg
-    = DocChange Prosemirror.Doc
+    = DocChange (Prosemirror.Doc CustomMark)
 
 
 main : Program () Model Msg
@@ -30,7 +62,7 @@ main =
             \flags ->
                 ( { selection = { start = 0, end = 0 }
                   , doc =
-                        case Decode.decodeString Prosemirror.decoder docJson of
+                        case Decode.decodeString (Prosemirror.decoder customMarkDecoder) docJson of
                             Ok value ->
                                 value
 
@@ -53,7 +85,12 @@ view : Model -> Html Msg
 view model =
     Html.section []
         [ Html.h1 [] [ Html.text "Elm Prosemirror spike" ]
-        , Prosemirror.view { onChange = DocChange } model.doc
+        , Prosemirror.view
+            { markEncoder = customMarkEncoder
+            , markDecoder = customMarkDecoder
+            , onChange = DocChange
+            }
+            model.doc
         , Html.h2 [] [ Html.text "DEBUG" ]
         , Html.div [] [ Html.text <| Debug.toString model.doc ]
         ]
@@ -68,4 +105,4 @@ update msg model =
 
 docJson : String
 docJson =
-    """{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Hello darkness my old friend"}]},{"type":"heading","attrs":{"level":3},"content":[{"type":"text","text":"I've come to talk with you again"}]},{"type":"paragraph","content":[{"type":"text","text":"lorem ipsum, "},{"type":"text","marks":[{"type":"link","attrs":{"href":"www.google.com","title":null}}],"text":"google"}]},{"type":"bullet_list","content":[{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"hoho"}]}]},{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"haha"}]},{"type":"bullet_list","content":[{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"hehe"}]}]}]}]}]}]}"""
+    """{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Hello darkness my old friend"}]},{"type":"heading","attrs":{"level":3},"content":[{"type":"text","text":"I've come to talk with you again"}]},{"type":"paragraph","content":[{"type":"text","text":"lorem "},{"type":"text","marks":[{"type":"highlight","attrs":{"id":"123"}}],"text":"ipsum"},{"type":"text","text":", "},{"type":"text","marks":[{"type":"link","attrs":{"href":"www.google.com","title":null}}],"text":"google"}]},{"type":"bullet_list","content":[{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"hoho"}]}]},{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"haha"}]},{"type":"bullet_list","content":[{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"hehe"}]}]}]}]}]}]}"""

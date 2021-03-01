@@ -8,31 +8,32 @@ import Json.Decode.Pipeline as Pipeline
 import Json.Encode as Encode
 
 
-type Doc
-    = Doc (List Content)
+type Doc a
+    = Doc (List (Content a))
 
 
-type Content
-    = Heading Int (List InlineContent)
-    | Paragraph (List InlineContent)
-    | BulletList (List ListItem)
+type Content a
+    = Heading Int (List (InlineContent a))
+    | Paragraph (List (InlineContent a))
+    | BulletList (List (ListItem a))
 
 
-type InlineContent
-    = InlineContent (List Mark) String
+type InlineContent a
+    = InlineContent (List (Mark a)) String
 
 
-type Mark
+type Mark a
     = Bold
     | Italics
     | Link { href : String, title : Maybe String }
+    | Custom a
 
 
-type ListItem
-    = ListItem (List Content)
+type ListItem a
+    = ListItem (List (Content a))
 
 
-empty : Doc
+empty : Doc a
 empty =
     Doc []
 
@@ -41,14 +42,14 @@ empty =
 -- decoders
 
 
-decoder : Decoder Doc
-decoder =
+decoder : (String -> Decoder a) -> Decoder (Doc a)
+decoder customDecoder =
     Decode.map Doc <|
         Decode.andThen
             (\type_ ->
                 case type_ of
                     "doc" ->
-                        Decode.field "content" (Decode.list contentDecoder)
+                        Decode.field "content" (Decode.list (contentDecoder customDecoder))
 
                     other ->
                         Decode.fail ("I expected to find a document at the top level, but instead I found " ++ other)
@@ -56,22 +57,22 @@ decoder =
             (Decode.field "type" Decode.string)
 
 
-contentDecoder : Decoder Content
-contentDecoder =
+contentDecoder : (String -> Decoder a) -> Decoder (Content a)
+contentDecoder customDecoder =
     Decode.andThen
         (\type_ ->
             case type_ of
                 "heading" ->
                     Decode.map (\( level, content ) -> Heading level content)
-                        headingDecoder
+                        (headingDecoder customDecoder)
 
                 "paragraph" ->
                     Decode.map Paragraph
-                        (Decode.field "content" (Decode.list inlineContentDecoder))
+                        (Decode.field "content" (Decode.list (inlineContentDecoder customDecoder)))
 
                 "bullet_list" ->
                     Decode.map BulletList
-                        (Decode.field "content" (Decode.list listItemDecoder))
+                        (Decode.field "content" (Decode.list (listItemDecoder customDecoder)))
 
                 other ->
                     Decode.fail ("I've found a type of content I don't recognize: " ++ other)
@@ -79,22 +80,22 @@ contentDecoder =
         (Decode.field "type" Decode.string)
 
 
-headingDecoder : Decoder ( Int, List InlineContent )
-headingDecoder =
+headingDecoder : (String -> Decoder a) -> Decoder ( Int, List (InlineContent a) )
+headingDecoder customDecoder =
     Decode.map2 (\level contents -> ( level, contents ))
         (Decode.at [ "attrs", "level" ] Decode.int)
-        (Decode.field "content" (Decode.list inlineContentDecoder))
+        (Decode.field "content" (Decode.list (inlineContentDecoder customDecoder)))
 
 
-listItemDecoder : Decoder ListItem
-listItemDecoder =
+listItemDecoder : (String -> Decoder a) -> Decoder (ListItem a)
+listItemDecoder customDecoder =
     Decode.map ListItem
         (Decode.field "type" Decode.string
             |> Decode.andThen
                 (\type_ ->
                     case type_ of
                         "list_item" ->
-                            Decode.field "content" (Decode.list contentDecoder)
+                            Decode.field "content" (Decode.list (contentDecoder customDecoder))
 
                         other ->
                             Decode.fail ("I expected to find all list items, but instead I found " ++ other)
@@ -102,15 +103,15 @@ listItemDecoder =
         )
 
 
-inlineContentDecoder : Decoder InlineContent
-inlineContentDecoder =
+inlineContentDecoder : (String -> Decoder a) -> Decoder (InlineContent a)
+inlineContentDecoder customDecoder =
     Decode.succeed InlineContent
-        |> Pipeline.optional "marks" (Decode.list markDecoder) []
+        |> Pipeline.optional "marks" (Decode.list (markDecoder customDecoder)) []
         |> Pipeline.required "text" Decode.string
 
 
-markDecoder : Decoder Mark
-markDecoder =
+markDecoder : (String -> Decoder a) -> Decoder (Mark a)
+markDecoder customDecoder =
     Decode.field "type" Decode.string
         |> Decode.andThen
             (\type_ ->
@@ -126,8 +127,8 @@ markDecoder =
                             (Decode.at [ "attrs", "href" ] Decode.string)
                             (Decode.at [ "attrs", "title" ] (Decode.nullable Decode.string))
 
-                    other ->
-                        Decode.fail ("I've found a mark I don't recognize: " ++ other)
+                    name ->
+                        Decode.map Custom (customDecoder name)
             )
 
 
@@ -135,39 +136,43 @@ markDecoder =
 -- encoder
 
 
-encode : Doc -> Encode.Value
-encode (Doc content) =
+type alias CustomEncoder a =
+    a -> Encode.Value
+
+
+encode : CustomEncoder a -> Doc a -> Encode.Value
+encode customEncoder (Doc content) =
     Encode.object
         [ ( "type", Encode.string "doc" )
-        , ( "content", Encode.list encodeContent content )
+        , ( "content", Encode.list (encodeContent customEncoder) content )
         ]
 
 
-encodeContent : Content -> Encode.Value
-encodeContent content =
+encodeContent : CustomEncoder a -> Content a -> Encode.Value
+encodeContent customEncoder content =
     case content of
         Heading level inlines ->
             Encode.object
                 [ ( "type", Encode.string "heading" )
                 , ( "attrs", Encode.object [ ( "level", Encode.int level ) ] )
-                , ( "content", Encode.list encodeInline inlines )
+                , ( "content", Encode.list (encodeInline customEncoder) inlines )
                 ]
 
         Paragraph inlines ->
             Encode.object
                 [ ( "type", Encode.string "paragraph" )
-                , ( "content", Encode.list encodeInline inlines )
+                , ( "content", Encode.list (encodeInline customEncoder) inlines )
                 ]
 
         BulletList listItems ->
             Encode.object
                 [ ( "type", Encode.string "bullet_list" )
-                , ( "content", Encode.list encodeListItem listItems )
+                , ( "content", Encode.list (encodeListItem customEncoder) listItems )
                 ]
 
 
-encodeInline : InlineContent -> Encode.Value
-encodeInline (InlineContent marks text) =
+encodeInline : CustomEncoder a -> InlineContent a -> Encode.Value
+encodeInline customEncoder (InlineContent marks text) =
     Encode.object <|
         List.concat
             [ [ ( "type", Encode.string "text" ) ]
@@ -176,21 +181,21 @@ encodeInline (InlineContent marks text) =
                     []
 
                 _ ->
-                    [ ( "marks", Encode.list encodeMark marks ) ]
+                    [ ( "marks", Encode.list (encodeMark customEncoder) marks ) ]
             , [ ( "text", Encode.string text ) ]
             ]
 
 
-encodeListItem : ListItem -> Encode.Value
-encodeListItem (ListItem contents) =
+encodeListItem : CustomEncoder a -> ListItem a -> Encode.Value
+encodeListItem customEncoder (ListItem contents) =
     Encode.object
         [ ( "type", Encode.string "list_item" )
-        , ( "content", Encode.list encodeContent contents )
+        , ( "content", Encode.list (encodeContent customEncoder) contents )
         ]
 
 
-encodeMark : Mark -> Encode.Value
-encodeMark mark =
+encodeMark : CustomEncoder a -> Mark a -> Encode.Value
+encodeMark customEncoder mark =
     case mark of
         Bold ->
             Encode.object [ ( "type", Encode.string "strong" ) ]
@@ -216,16 +221,28 @@ encodeMark mark =
                   )
                 ]
 
+        Custom other ->
+            customEncoder other
+
 
 
 -- VIEW
 
 
-view : { onChange : Doc -> msg } -> Doc -> Html msg
-view { onChange } doc =
+view :
+    { onChange : Doc a -> msg
+    , markEncoder : a -> Encode.Value
+    , markDecoder : String -> Decoder a
+    }
+    -> Doc a
+    -> Html msg
+view config doc =
     Html.node "elm-prosemirror"
-        [ property "content" (encode doc)
-        , Decode.map onChange (loggingDecoder (Decode.at [ "detail", "state" ] decoder))
+        [ property "content" (encode config.markEncoder doc)
+        , decoder config.markDecoder
+            |> Decode.at [ "detail", "state" ]
+            |> loggingDecoder
+            |> Decode.map config.onChange
             |> Events.on "change"
         ]
         []

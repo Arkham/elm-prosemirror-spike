@@ -324,3 +324,7 @@ li.ProseMirror-selectednode:after {
 }
 
 .ProseMirror p { margin-bottom: 1em }
+
+[data-highlight-id] {
+  background-color: greenyellow;
+}
