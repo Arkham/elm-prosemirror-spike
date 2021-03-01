@@ -88,13 +88,14 @@ class ElmProseMirror extends HTMLElement {
       dispatchTransaction: function(tr) {
         this.updateState(this.state.apply(tr));
         const newState = this.state.doc.toJSON();
-        console.log(JSON.stringify(newState));
-        console.log(tr.selection.from);
-        console.log(tr.selection.to);
 
         const event = new CustomEvent('change', {
           detail: {
-            state: newState
+            state: newState,
+            selection: {
+              from: tr.selection.from,
+              to: tr.selection.to
+            }
           }
         });
 

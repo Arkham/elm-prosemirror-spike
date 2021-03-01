@@ -8,12 +8,6 @@ import Json.Encode as Encode
 import Prosemirror
 
 
-type alias Range =
-    { start : Int
-    , end : Int
-    }
-
-
 type CustomMark
     = Highlight String
 
@@ -46,14 +40,14 @@ customMarkEncoder mark =
 
 
 type alias Model =
-    { selection : Range
+    { selection : Prosemirror.Selection
     , doc : Prosemirror.Doc CustomMark
     , isHighlighting : Bool
     }
 
 
 type Msg
-    = DocChange (Prosemirror.Doc CustomMark)
+    = DocChange ( Prosemirror.Doc CustomMark, Prosemirror.Selection )
     | ToggleHighlighting
 
 
@@ -62,7 +56,7 @@ main =
     Browser.element
         { init =
             \flags ->
-                ( { selection = { start = 0, end = 0 }
+                ( { selection = { from = 0, to = 0 }
                   , doc =
                         case Decode.decodeString (Prosemirror.decoder customMarkDecoder) docJson of
                             Ok value ->
@@ -103,6 +97,7 @@ view model =
                     "Start highlighting"
             ]
         , Html.h2 [] [ Html.text "DEBUG" ]
+        , Html.div [] [ Html.text <| Debug.toString model.selection ]
         , Html.div [] [ Html.text <| Debug.toString model.doc ]
         ]
 
@@ -110,8 +105,8 @@ view model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        DocChange doc ->
-            ( { model | doc = doc }, Cmd.none )
+        DocChange ( doc, selection ) ->
+            ( { model | doc = doc, selection = selection }, Cmd.none )
 
         ToggleHighlighting ->
             ( { model | isHighlighting = not model.isHighlighting }, Cmd.none )

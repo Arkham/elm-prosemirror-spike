@@ -1,4 +1,4 @@
-module Prosemirror exposing (Doc, decoder, empty, view)
+module Prosemirror exposing (Doc, Selection, decoder, empty, view)
 
 import Html exposing (Html)
 import Html.Attributes exposing (property)
@@ -10,6 +10,12 @@ import Json.Encode as Encode
 
 type Doc a
     = Doc (List (Content a))
+
+
+type alias Selection =
+    { from : Int
+    , to : Int
+    }
 
 
 type Content a
@@ -230,7 +236,7 @@ encodeMark customEncoder mark =
 
 
 view :
-    { onChange : Doc a -> msg
+    { onChange : ( Doc a, Selection ) -> msg
     , markEncoder : a -> Encode.Value
     , markDecoder : String -> Decoder a
     }
@@ -239,13 +245,19 @@ view :
 view config doc =
     Html.node "elm-prosemirror"
         [ property "content" (encode config.markEncoder doc)
-        , decoder config.markDecoder
-            |> Decode.at [ "detail", "state" ]
-            |> loggingDecoder
-            |> Decode.map config.onChange
-            |> Events.on "change"
+        , Events.on "change" <|
+            Decode.map2 (\state selection -> config.onChange ( state, selection ))
+                (Decode.at [ "detail", "state" ] (loggingDecoder (decoder config.markDecoder)))
+                (Decode.at [ "detail", "selection" ] (loggingDecoder selectionDecoder))
         ]
         []
+
+
+selectionDecoder : Decoder Selection
+selectionDecoder =
+    Decode.map2 Selection
+        (Decode.field "from" Decode.int)
+        (Decode.field "to" Decode.int)
 
 
 loggingDecoder : Decoder a -> Decoder a
