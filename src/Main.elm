@@ -43,12 +43,14 @@ type alias Model =
     { selection : Prosemirror.Selection
     , doc : Prosemirror.Doc CustomMark
     , isHighlighting : Bool
+    , nextHighlightId : Int
     }
 
 
 type Msg
     = DocChange ( Prosemirror.Doc CustomMark, Prosemirror.Selection )
     | ToggleHighlighting
+    | PersistHighlight
 
 
 main : Program () Model Msg
@@ -69,6 +71,7 @@ main =
                                 in
                                 Prosemirror.empty
                   , isHighlighting = False
+                  , nextHighlightId = 1
                   }
                 , Cmd.none
                 )
@@ -82,12 +85,14 @@ view : Model -> Html Msg
 view model =
     Html.section []
         [ Html.h1 [] [ Html.text "Elm Prosemirror spike" ]
-        , Prosemirror.view
-            { markEncoder = customMarkEncoder
-            , markDecoder = customMarkDecoder
-            , onChange = DocChange
-            }
-            model.doc
+        , Html.div [ Events.onMouseUp PersistHighlight ]
+            [ Prosemirror.view
+                { markEncoder = customMarkEncoder
+                , markDecoder = customMarkDecoder
+                , onChange = DocChange
+                }
+                model.doc
+            ]
         , Html.button [ Events.onClick ToggleHighlighting ]
             [ Html.text <|
                 if model.isHighlighting then
@@ -110,6 +115,17 @@ update msg model =
 
         ToggleHighlighting ->
             ( { model | isHighlighting = not model.isHighlighting }, Cmd.none )
+
+        PersistHighlight ->
+            if model.isHighlighting then
+                let
+                    _ =
+                        Debug.log "PersistHighlight!" ()
+                in
+                ( { model | doc = model.doc, nextHighlightId = model.nextHighlightId + 1 }, Cmd.none )
+
+            else
+                ( model, Cmd.none )
 
 
 docJson : String
