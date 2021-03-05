@@ -1,4 +1,14 @@
-module Prosemirror exposing (Doc, Selection, decoder, empty, view)
+module Prosemirror exposing
+    ( Doc
+    , Mark(..)
+    , Selection
+    , State
+    , Transaction(..)
+    , applyTransaction
+    , decoder
+    , empty
+    , view
+    )
 
 import Html exposing (Html)
 import Html.Attributes exposing (property)
@@ -10,6 +20,17 @@ import Json.Encode as Encode
 
 type Doc a
     = Doc (List (Content a))
+
+
+type alias State a =
+    { doc : Doc a
+    , transactions : List ( Int, Transaction a )
+    , nextTransactionId : Int
+    }
+
+
+type Transaction a
+    = AddMark Selection (Mark a)
 
 
 type alias Selection =
@@ -231,6 +252,23 @@ encodeMark customEncoder mark =
             customEncoder other
 
 
+encodeTransactions : CustomEncoder a -> List ( Int, Transaction a ) -> Encode.Value
+encodeTransactions customEncoder transactions =
+    Encode.list
+        (\( id, transaction ) ->
+            case transaction of
+                AddMark selection mark ->
+                    Encode.object
+                        [ ( "type", Encode.string "add-mark" )
+                        , ( "id", Encode.int id )
+                        , ( "from", Encode.int selection.from )
+                        , ( "to", Encode.int selection.to )
+                        , ( "details", encodeMark customEncoder mark )
+                        ]
+        )
+        transactions
+
+
 
 -- VIEW
 
@@ -240,11 +278,12 @@ view :
     , markEncoder : a -> Encode.Value
     , markDecoder : String -> Decoder a
     }
-    -> Doc a
+    -> State a
     -> Html msg
-view config doc =
+view config { doc, transactions } =
     Html.node "elm-prosemirror"
         [ property "content" (encode config.markEncoder doc)
+        , property "transactions" (encodeTransactions config.markEncoder transactions)
         , Events.on "change" <|
             Decode.map2 (\state selection -> config.onChange ( state, selection ))
                 (Decode.at [ "detail", "state" ] (loggingDecoder (decoder config.markDecoder)))
@@ -275,3 +314,15 @@ loggingDecoder realDecoder =
                             |> Debug.log "decoding error"
                             |> Decode.fail
             )
+
+
+
+-- update
+
+
+applyTransaction : Transaction a -> State a -> State a
+applyTransaction transaction state =
+    { state
+        | transactions = ( state.nextTransactionId, transaction ) :: state.transactions
+        , nextTransactionId = state.nextTransactionId + 1
+    }

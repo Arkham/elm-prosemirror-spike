@@ -41,7 +41,7 @@ customMarkEncoder mark =
 
 type alias Model =
     { selection : Prosemirror.Selection
-    , doc : Prosemirror.Doc CustomMark
+    , editorState : Prosemirror.State CustomMark
     , isHighlighting : Bool
     , nextHighlightId : Int
     }
@@ -59,17 +59,21 @@ main =
         { init =
             \flags ->
                 ( { selection = { from = 0, to = 0 }
-                  , doc =
-                        case Decode.decodeString (Prosemirror.decoder customMarkDecoder) docJson of
-                            Ok value ->
-                                value
+                  , editorState =
+                        { doc =
+                            case Decode.decodeString (Prosemirror.decoder customMarkDecoder) docJson of
+                                Ok value ->
+                                    value
 
-                            Err err ->
-                                let
-                                    _ =
-                                        Debug.log "Error while decoding document: " err
-                                in
-                                Prosemirror.empty
+                                Err err ->
+                                    let
+                                        _ =
+                                            Debug.log "Error while decoding document: " err
+                                    in
+                                    Prosemirror.empty
+                        , transactions = []
+                        , nextTransactionId = 1
+                        }
                   , isHighlighting = False
                   , nextHighlightId = 1
                   }
@@ -91,7 +95,7 @@ view model =
                 , markDecoder = customMarkDecoder
                 , onChange = DocChange
                 }
-                model.doc
+                model.editorState
             ]
         , Html.button [ Events.onClick ToggleHighlighting ]
             [ Html.text <|
@@ -103,26 +107,39 @@ view model =
             ]
         , Html.h2 [] [ Html.text "DEBUG" ]
         , Html.div [] [ Html.text <| Debug.toString model.selection ]
-        , Html.div [] [ Html.text <| Debug.toString model.doc ]
+        , Html.div [] [ Html.text <| Debug.toString model.editorState ]
         ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        DocChange ( doc, selection ) ->
-            ( { model | doc = doc, selection = selection }, Cmd.none )
+        DocChange ( newDoc, selection ) ->
+            let
+                editorState =
+                    model.editorState
+
+                newEditorState =
+                    { editorState | doc = newDoc }
+            in
+            ( { model | editorState = newEditorState, selection = selection }, Cmd.none )
 
         ToggleHighlighting ->
             ( { model | isHighlighting = not model.isHighlighting }, Cmd.none )
 
         PersistHighlight ->
-            if model.isHighlighting then
+            if model.isHighlighting && model.selection.to /= model.selection.from then
                 let
-                    _ =
-                        Debug.log "PersistHighlight!" ()
+                    newEditorState =
+                        Prosemirror.applyTransaction
+                            (Prosemirror.AddMark model.selection
+                                (Prosemirror.Custom
+                                    (Highlight (String.fromInt model.nextHighlightId))
+                                )
+                            )
+                            model.editorState
                 in
-                ( { model | doc = model.doc, nextHighlightId = model.nextHighlightId + 1 }, Cmd.none )
+                ( { model | editorState = newEditorState, nextHighlightId = model.nextHighlightId + 1 }, Cmd.none )
 
             else
                 ( model, Cmd.none )

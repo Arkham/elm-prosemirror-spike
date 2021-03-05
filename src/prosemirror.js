@@ -52,7 +52,10 @@ const mySchema = new Schema({
 const myPlugins = exampleSetup({schema: mySchema});
 
 class ElmProseMirror extends HTMLElement {
-  constructor() { super(); }
+  constructor() {
+    super();
+    this._appliedTransactions = new Set();
+  }
 
   connectedCallback() {
     this._initElement();
@@ -67,6 +70,22 @@ class ElmProseMirror extends HTMLElement {
     if (!this._content) {
       this._content = content;
     }
+  }
+
+  set transactions(transactions) {
+    if (!this._editor || transactions.length < 1) return;
+
+    let newTransactions = transactions.filter(transaction => !this._appliedTransactions.has(transaction.id));
+
+    if (newTransactions.length < 1) return;
+
+    newTransactions.forEach(transaction => this._appliedTransactions.add(transaction.id));
+
+    let newTr = newTransactions.reduce((acc, transaction) => {
+      return acc.addMark(transaction.from, transaction.to, mySchema.mark('highlight', { id: transaction.details.attrs.id }))
+    }, this._editor.state.tr);
+
+    this._editor.dispatch(newTr);
   }
 
   _initElement() {
