@@ -35,6 +35,7 @@ const marks = {
     attrs: {
       id: {}
     },
+    excludes: "",
     parseDOM: [{ tag: "[data-highlight-id]", getAttrs(dom) {
       return {id: dom.getAttribute("data-highlight-id")}
     }}],
